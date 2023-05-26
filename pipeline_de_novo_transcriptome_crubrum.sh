@@ -1,4 +1,4 @@
-#################### Differential gene expression of Corallium rubrum under ocean warming conditions ##################
+#################### Steps for creating a de novo transcriptome assembly for Corallium rubrum under ocean warming conditions ##################
 
 #RNAseq pipeline
 
@@ -6,12 +6,12 @@
 #N = 36
 
 #TREATMENTS:
-#control and high temperature in T0 (18C vs 25C)
-#                                            T1
-#                                            T2
-#                                            C0
-#                                            C1
-#                                            C2
+#control and high temperature (18C vs 25C) in   T0 
+#                                               T1
+#                                               T2
+#                                               C0
+#                                               C1
+#                                               C2
 
 ########################################### Raw data quality control #############################################
 
@@ -24,7 +24,8 @@ for file in *.md5; do md5sum -c $file; done
 
 #Merge & rename files with individual ID.
 
-#The rename function in marbits is util-linux rename (man7.org/linux/man-pages/man1/rename.1.html), which doesn't support s/.../.../ shit that you always do. So, you have to do:
+#The rename function in marbits is util-linux rename (man7.org/linux/man-pages/man1/rename.1.html), which doesn't support s/.../.../ shit that you always do. 
+#So, you have to do:
 
 #rename 'part_you_want_to_change' 'thing_you_want_to_change_it_for' *extension_of_file(.fq.gz)
 
@@ -58,12 +59,10 @@ do
 done
 
 #what it does:
-#This would iterate over all compressed Fastq files in the current directory and extract the sample name into the shell variable sample. For all the filenames shown in the question, this would be XXUDI-idt-UMI_R1.
-
+#This would iterate over all compressed Fastq files in the current directory and extract the sample name into the shell variable sample. 
+#For all the filenames shown in the question, this would be XXUDI-idt-UMI_R1.
 #The rnum variable will hold the R# bit at the end of the filename.
-
 #The sample name is extracted by taking the filename and first removing everything up to and including the first _ character, and then removing everything after and including the first _ character from that result. The value for the rnum variable is extracted in a similar manner.
-
 #The file is then simply appended onto the end of the aggregated file using cat >>. The output filename will be constructed from the sample name, the R#, and the string .fastq.gz. For the shown files, this will be XXUDI-idt-UMI_R1.fastq.gz.
 
 #check number of reads for R1 and R2 with:
@@ -83,7 +82,7 @@ module avail #command to check programs intalled in marbits --> verify you have 
 #RSEM
 #Salmon
 
-##################################### FastQC #############################################
+##################################### 1) FastQC #############################################
 
 #define variables:
 
@@ -123,7 +122,7 @@ inputFile=$(awk "NR==$SLURM_ARRAY_TASK_ID" fastqFileList.txt)
 # do all the interesting things
 fastqc --outdir fastqc_output ${inputFile}
 
-##########################################################################################Script finish here
+############ Script finish here
 
 #execute
 sbatch fastqc.slurm
@@ -133,8 +132,8 @@ sbatch fastqc.slurm
 #$ for f in /directory/of/the/data/*.fastq.gz; do fastqc --outdir /output/directory/fastqc_output $f ; done #the one i used in HK
 
 
-#################################### Trimmomatic #######################################
-#To remove adapters that come from the illumina
+#################################### 2) Trimmomatic #######################################
+#To remove adapters that come from the illumina and to remove bad sequences
 
 #define variables:
 
@@ -180,7 +179,7 @@ done
 
 trimmomatic PE -threads 10 -phred33 -trimlog f1_trimmolog ${inputFile1} ${inputFile2} "${inputFile1}"_paired.fq.gz "${inputFile1}"_unpaired.fq.gz ${inputFile2}_paired.fq.gz ${inputFile2}_unpaired.fq.gz ILLUMINACLIP:./adapters/TruSeq3-PE.fa:2:30:10 LEADING:4 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:40
 
-#################################################### This script never worked, we need to find a solution, so I did this:
+#################################################### This script never worked, we needed to find a solution, so I did this:
 
 tmux new-session #open an interactive session within marbits 
 srun --pty /bin/bash #This will allocate an interactive session in a compute node and will asign to you 2 CPUs to work
@@ -205,12 +204,11 @@ CAS1_C1_R2.fastq.gz_unpaired.fq.gz
 # 'unpaired' output where a read survived, but the partner read did not
 
 #You can close the window but check how and you can leave the job running
-
 tmux a #you can come back to your interactive session where the job is running
 
 Ctrl + B and X #This will close entirely the interactive session and stop showing you have an active job in sqa
 
-###################################### FastQC after trimming #############################################
+###################################### 3) FastQC after trimming #############################################
 
 #within trimmomatic directory (where the outputfiles are), I created:
 
@@ -256,12 +254,10 @@ fastqc --outdir fastqc_output ${inputFile}
 #job ID = 592752
 
 
-############################################# Kraken #################################################
+############################################# 4) Kraken #################################################
+#Taxonomic sequence classifier that assigns taxonomic labels to short DNA reads. It does this by examining the -mers within a read and querying a database with those K-mers. We need to eliminate bacteria, fungi and virus that don't belong to anything that it's coral.
 
-#Taxonomic sequence classifier that assigns taxonomic labels to short DNA reads. It does this by examining the -mers within a read and querying a database with those K-mers.
-#We need to eliminate bacteria, fungi and virus that don't belong to anything that it's coral.
-
-##### Kraken installation locally in my Marbits user ######
+##### 4.1) Kraken installation locally in my Marbits user ######
 
 #Download and copy the kraken2-master folder from https://github.com/DerrickWood/kraken2
 #go to folder where it was download and do:
@@ -289,21 +285,21 @@ export PATH=$PATH:/mnt/lustre/bio/users/sramirezc/programs/kraken2/kraken2lib.pm
 export LC_CTYPE=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 
-############################## Build Kraken2 custom database
+######## 4.2) Build Kraken2 custom database ########
 
-############### Step 1: Download the ncbi taxonomy names and tree and accession number to taxon maps
+############### Step 4.2.1: Download the ncbi taxonomy names and tree and accession number to taxon maps
 #download available databases for kraken in https://ccb.jhu.edu/software/kraken2/index.shtml?t=downloads, with:
 
 wget -m ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/. 
 
 ./kraken2-build --download-taxonomy --db ../kraken2_database
 
-############### Step 2: Install all required reference libraries (I used bacteria, fungus and virus)
+############### Step 4.2.2: Install all required reference libraries (I used bacteria, fungus and virus)
 ./kraken2-build --download-library bacteria --db ../kraken2_db --no-masking #replace bacteria with fungi and viral
 ./kraken2-build --download-library fungi --db ../kraken2_db --no-masking
 ./kraken2-build --download-library viral --db ../kraken2_db --no-masking
 
-############### Step 3: Build the database
+############### Step 4.2.3: Build the database
 
 nano kraken-build-lib
 
@@ -330,9 +326,9 @@ sbatch kraken-build-lib
 ## Output:
 #Database construction complete. [Total: 7h3m27.058s]
 
-############### Step 4 - Classify my reads
-#script 
+############### Step 4.4.4 - Classify my reads
 
+#script 
 nano kraken #Always check the paths and the name of the files before running:
 
 #!/bin/bash
@@ -355,58 +351,7 @@ sbatch kraken
 
 #output
 
-############################# Download transcriptome reference C.rubrum ###############################
-
-# download latest version of compiled binaries of NCBI SRA toolkit 
-# (version 3.0.0) for Ubuntu Linux
-$ wget https://ftp-trace.ncbi.nlm.nih.gov/sra/sdk/current/sratoolkit.current-ubuntu64.tar.gz
-
-# extract tar.gz file 
-$ tar -zxvf sratoolkit.current-ubuntu64.tar.gz
-
-# add binaries to path using export path or editing ~/.bashrc file
-$ export PATH=$PATH:/home/sramirezc/sramirezc/programs/sratoolkit.3.0.0-ubuntu64/bin
-# Now SRA binaries added to path and ready to use
-
-# verify the binaries added to the system path
-which fastq-dump
-# output
-~/sramirezc/programs/sratoolkit.3.0.0-ubuntu64/bin/fastq-dump
-
-#Use prefetch to download SRA files. The prefetch will download the SRA file under the SRA accession folder in the current directory.
-#SRA accession numbers obtained from https://www.ncbi.nlm.nih.gov/Traces/study/?acc=SRX675792&o=acc_s%3Aa
-
-#$ prefetch  SRR5790106  # for a single file
-$ prefetch SRR1552943 SRR1552944 SRR1552945 SRR1553369 # multiple files
-
-#Convert SRA file to FASTQ file using fastq-dump or fasterq-dump,
-
-# replace fastq-dump with fasterq-dump which is much faster 
-# and efficient for large datasets
-# by default it will use 6 threads (-e option)
-
-fasterq-dump --concatenate-reads --split-spot SRR1552943 SRR1552944 SRR1552945 SRR1553369 #This will merge all four runs in one FASTQ file. Since we have a transcriptome assembly, this means there will be gaps in the reference as it is not a genome. Thus, we need to concatenate the fastq file in one to obtain only one reference
-
-#output
-
-
-
-#Convert SRA data into other biological formatsPermalink
-#SRA tools allow you to convert SRA files into FASTA, ABI, Illumina native (QSEQ), and SFF format
-
-# convert to FASTA
-# you need to first download the FASTQ file to convert to FASTA file --> we created it with fasterq-dump
-
-$ fastq-dump --fasta 60   
-# if you have paired-end FASTQ, use --split-files -fasta 60 
-# if you don't use --split-files for paired-ends, the reads will be merged from both ends
-# number 60 represents number of bases per line
-# Note: --fasta options is not available with fasterq-dump
-
-
-
-
-################################## transcriptome reference ################################
+################################## 5) Design transcriptome reference ################################
 
 ###Trinity
 
@@ -438,16 +383,20 @@ sbatch Trinity.slurm
 #no errors in Trinity.err
 #history of process inside Trinity.log.out
 
+#TOTAL TRANSCRIPTS FROM RAW DE NOVO TRANSCRIPTOME: 533146
 
-#TOTAL TRANSCRIPTS FROM RAW DE NOVO TRANSCRIPTOME:
+#Now, we need to check we didn't end up with a transcriptome that actually has the genes that come from the Coral, so we do:
 
-533146
+########################### 6) Transcriptome Assembly Quality Assessment #########################
+#align with Bowtie2
+#see completeness with BUSCO
+#use N50
+#transdecoder
 
-#Transcriptome Assembly Quality Assessment
+################### 6.1) Transdecoder ########################
+#identifies candidate coding regions within transcript sequences because it is important to know that the contigs created during de novo assembly actually transcribed real genes and it works ok for filtering and to avoid reduncy as you end up with A LOT of data. Trust me, you'll be grateful ;)
 
-################### Transdecoder ########################3
-
-#identifies candidate coding regions within transcript sequences because it is important to know that the contigs created during de novo assembly actually transcribed real genes 
+#script:
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -470,12 +419,11 @@ TransDecoder.LongOrfs -t crubrum.trinity.fasta --output_dir /home/sramirezc/sram
 
 #### Script ends here :) #####
 
+#We obtain longest_orfs.pep: 204254 longest ORFs
 
-#We obtain longest_orfs.pep:
+######## Step 6.1.1) Including homology searches as ORF retention criteria ######
 
-204254 longest ORFs
-
-######## Including homology searches as ORF retention criteria ######
+#script
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -487,7 +435,6 @@ TransDecoder.LongOrfs -t crubrum.trinity.fasta --output_dir /home/sramirezc/sram
 #SBATCH --error=blastp_uniprot.err      # File to which standard err will be written | provide path
 ##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
 
-
 ###### load modules
 
 module load blast/2.7.1
@@ -496,7 +443,7 @@ module load blast/2.7.1
 
 blastp -query longest_orfs.pep -db /home/sramirezc/sramirezc/crubrum_rnaseq/assembl_quality/blast/databases/uniprot/uniprot_021222.fasta -out ./c.rubrum_blastp_uniprot.outfmt6.txt -evalue 1e-5 -num_threads 30 -max_target_seqs 1 -outfmt 6
 
-#################### Script ends here ###################3
+#################### Script ends here ###################
 
 #longest_orfs.pep   : all ORFs meeting the minimum length criteria, regardless of coding potential.
 #longest_orfs.gff3  : positions of all ORFs as found in the target transcripts
@@ -506,8 +453,7 @@ blastp -query longest_orfs.pep -db /home/sramirezc/sramirezc/crubrum_rnaseq/asse
 #transcripts.fasta.transdecoder.gff3 : positions within the target transcripts of the final selected ORFs
 #transcripts.fasta.transdecoder.bed  : bed-formatted file describing ORF positions, best for viewing using GenomeView or IGV.
 
-
-######## predict the likely coding regions #####
+######## Step 6.1.2) Predict the likely coding regions #####
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -545,52 +491,25 @@ LKRERERVAAGLKTVDDRTWDHRDERRVPKKGVSRQSSSSSTHGESSEHQSQTTLEERGQ
 PQAIKEEAGEGHNRKKISHSKQLADDMSQGRREAFEVFRSDYPHNATIEENKRTLKQRYS
 EAKALGEQVNNSRKRINTIKTQIEQHRIRRSMHVNGDEDNIDEEDRLRNSIEEEKSRYKD
 
-#Total transcripts with longest ORF and homology:
+#Total transcripts with longest ORF and homology: 124373
 
-124373
-
-#Get complete transcript seq for final selected contigs. It selects the column that says gene
+############# Step 6.1.3) Get complete transcript seq for final selected contigs. It selects the column that says gene
 awk 'BEGIN{FS="\t"}{if ($3 == "gene") print}' *.transdecoder.gff3 > final_assembly_after_transdecoder_genes.gff3 
 
 cut -f 1,4,5 *transdecoder_genes.gff3 > crubrum_final_transdecoder_genes.bed #cut columns 1, 4 and 5 to the output
 
-bedtools getfasta -fi crubrum.trinity.fasta -bed crubrum_final_transdecoder_genes.bed -fo crubrum_final_reference.fasta #using bedtools to extract the nucleotide sequences corresponding to the genomic coordinates specified in the crubrum_final_transdecoder_genes.bed file, and write them to a new file called crubrum_final_reference.fasta
+bedtools getfasta -fi crubrum.trinity.fasta -bed crubrum_final_transdecoder_genes.bed -fo crubrum_final_reference.fasta #using bedtools to extract the nucleotide sequences corresponding to the genomic coordinates specified in the crubrum_final_transdecoder_genes.bed file, and write them to a new file called crubrum_final_reference.fasta!!! Keep it for further analysis.
 
-#To send bam files to jeanba:
+less crubrum_final_reference.fasta
 
-#check bam files:
-samtools view CAS1_C1_unclassified.bam | less
+#
 
-#Go to RSEM_out directory and do:
+######################### 6.2) Bowtie2 ####################################
 
-for directory in *unclassifiedRSEM_out*; do
-  pushd "$directory"
-  
-  for filename in *bam; do
-    extension="${filename}"
-    
-    
-    target_filename="${directory}_${extension}"
-    
-    mv "$filename" "${target_filename}"
-    
-  done
-  popd
-done
+######################### 6.2.1) Bowtie2_index_build ##############################
+#Mapping against your reads
 
-#Then:
-
-mkdir bamfiles
-
-cp ./*/*.bam ./bamfiles/
-
-#Check for bam files:
-
-samtools view LOP_T2_1_bowtie2.bam.for_rsem.bam | head -n 5
-
-
-######################### Bowtie2_index_build ##############################
-
+#scrcipt
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
 #SBATCH --job-name=c.rubrum_bowtie2_index
@@ -613,7 +532,7 @@ bowtie2-build crubrum_final_reference.fasta crubrum_bowtie_index_2
 
 sbatch bowtie2_index.slurm
 
-######################### Bowtie2 alignment ##########################
+######################### 6.2.2 Bowtie2 alignment ##########################
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -685,16 +604,18 @@ Mate 1:    GCAGATTATATGAGTCAGCTACGATATTGTT
 Mate 2:                               TGTTTGGGGTGACACATTACGCGTCTTTGAC
 Reference: GCAGATTATATGAGTCAGCTACGATATTGTTTGGGGTGACACATTACGCGTCTTTGAC
 
-############### Trinity Transcript Quantification #############
+############### 6.3) Trinity Transcript Quantification #############
 
-#remove from headers in crubrum_final_referemce.fasta:
+#remove from headers in crubrum_final_reference.fasta:
 
 sed -i 's/:.*$//' crubrum_final_reference.fasta
 
-#from this: >TRINITY_DN0_c0_g1_i2:1-3918
+#from this: >TRINITY_DN0_c0_g1_i2:1-3918 
 #to this: >TRINITY_DN0_c0_g1_i2
 
-#create referemce:
+#### 6.3.1) create referemce:
+
+#script:
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -730,9 +651,11 @@ less RSEM_ref.err:
 #CMD: touch /mnt/lustre/bio/users/sramirezc/crubrum_rnaseq/c.rubrum_reference/downstream_analyses/RSEM/RSEM_out/RSEM_ref_est/crubrum_final_reference.fasta.RSEM.rsem.prepped.started
 #CMD: rsem-prepare-reference  --transcript-to-gene-map /mnt/lustre/bio/users/sramirezc/crubrum_rnaseq/c.rubrum_reference/downstream_analyses/RSEM/RSEM_out/RSEM_ref_est/crubrum_final_reference.fasta.gene_trans_map /mnt/lustre/bio/users/sramirezc/crubrum_rnaseq/c.rubrum_reference/downstream_analyses/RSEM/RSEM_out/RSEM_ref_est/crubrum_final_reference.fasta /mnt/lustre/bio/users/sramirezc/crubrum_rnaseq/c.rubrum_reference/downstream_analyses/RSEM/RSEM_out/RSEM_ref_est/crubrum_final_reference.fasta.RSEM
 #Only prepping reference. Stopping now.
-########
+######## Script ends here ######
 
-#using align_and_estimate_abundance.pl 
+
+###### 6.3.2) using align_and_estimate_abundance.pl ########
+
 #RSEM
 #Bowtie2
 
@@ -759,12 +682,11 @@ for R1 in *_R1.fq.gz; do R2=${R1/R1.fq.gz}"R2.fq.gz"; output=${R1/_R1.fq.gz}"_RS
 
 ##### Script ends here ####
 
-###################### Build Transcript and Gene Expression Matrices ##########
+###################### 6.4) Build Transcript and Gene Expression Matrices ##########
 
-#You get these files per sample (R1&R2):
-
-Folders: _RSEM_out 
-files: RSEM.stat, bowtie2.bam bowtie2.bam.for_rsem.bam, bowtie2.bam.ok, RSEM.isoforms.results.ok, RSEM.genes.results, RSEM.isoforms.results
+#### You get these files per sample (R1&R2):
+#Folders: _RSEM_out 
+#files: RSEM.stat, bowtie2.bam bowtie2.bam.for_rsem.bam, bowtie2.bam.ok, RSEM.isoforms.results.ok, RSEM.genes.results, RSEM.isoforms.results
 
 #The most important are RSEM.genes.results and RSEM.isoforms.results, but you have to change the name of each to build the matrix as follows. Use the isoforms. results file always
 
@@ -809,7 +731,9 @@ CAS3_C1.isoforms.results   CAS_T0_1.isoforms.results  CAS_T2_2.isoforms.results 
 
 #then run the following:
 
-###################### Build Transcript and Gene Expression Matrices
+###################### 6.5) Build Transcript and Gene Expression Matrices ###################
+
+#script
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -836,16 +760,16 @@ abundance_estimates_to_matrix.pl --est_method RSEM --gene_trans_map /home/sramir
 
 #Output files
 
--rw-r--r--  1 sramirezc bio  60934425 Dec  5 10:00 crubrum.gene.counts.matrix
--rw-r--r--  1 sramirezc bio  70160052 Dec  5 10:02 crubrum.gene.TMM.EXPR.matrix
--rw-r--r--  1 sramirezc bio  34563094 Dec  5 10:00 crubrum.gene.TPM.not_cross_norm
--rw-r--r--  1 sramirezc bio       524 Dec  5 10:01 crubrum.gene.TPM.not_cross_norm.runTMM.R
--rw-r--r--  1 sramirezc bio      1840 Dec  5 10:02 crubrum.gene.TPM.not_cross_norm.TMM_info.txt
--rw-r--r--  1 sramirezc bio 111106892 Dec  5 10:00 crubrum.isoform.counts.matrix
--rw-r--r--  1 sramirezc bio 128812305 Dec  5 10:01 crubrum.isoform.TMM.EXPR.matrix
--rw-r--r--  1 sramirezc bio  63721483 Dec  5 10:00 crubrum.isoform.TPM.not_cross_norm
--rw-r--r--  1 sramirezc bio       530 Dec  5 10:00 crubrum.isoform.TPM.not_cross_norm.runTMM.R
--rw-r--r--  1 sramirezc bio      1846 Dec  5 10:01 crubrum.isoform.TPM.not_cross_norm.TMM_info.txt
+#-rw-r--r--  1 sramirezc bio  60934425 Dec  5 10:00 crubrum.gene.counts.matrix
+#-rw-r--r--  1 sramirezc bio  70160052 Dec  5 10:02 crubrum.gene.TMM.EXPR.matrix
+#-rw-r--r--  1 sramirezc bio  34563094 Dec  5 10:00 crubrum.gene.TPM.not_cross_norm
+#-rw-r--r--  1 sramirezc bio       524 Dec  5 10:01 crubrum.gene.TPM.not_cross_norm.runTMM.R
+#-rw-r--r--  1 sramirezc bio      1840 Dec  5 10:02 crubrum.gene.TPM.not_cross_norm.TMM_info.txt
+#-rw-r--r--  1 sramirezc bio 111106892 Dec  5 10:00 crubrum.isoform.counts.matrix
+#-rw-r--r--  1 sramirezc bio 128812305 Dec  5 10:01 crubrum.isoform.TMM.EXPR.matrix
+#-rw-r--r--  1 sramirezc bio  63721483 Dec  5 10:00 crubrum.isoform.TPM.not_cross_norm
+#-rw-r--r--  1 sramirezc bio       530 Dec  5 10:00 crubrum.isoform.TPM.not_cross_norm.runTMM.R
+#-rw-r--r--  1 sramirezc bio      1846 Dec  5 10:01 crubrum.isoform.TPM.not_cross_norm.TMM_info.txt
 
 #but the most important are:
 
@@ -857,6 +781,7 @@ crubrum.isoform.TMM.EXPR.matrix --> a matrix of TMM-normalized expression values
 
 #After this, you have to normalize your data and filter lowly expressed transcripts. Do this:
 
+#script
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
 #SBATCH --job-name=crubrum_fil_matrix
@@ -882,14 +807,13 @@ filter_low_expr_transcripts.pl --matrix crubrum.gene.TPM.not_cross_norm --transc
 
 #Matrix is filtered.
 
-##################### Counting Full Length Trinity Transcripts with BLAST ##################
+##################### 6.4) Counting Full Length Trinity Transcripts with BLAST ##################
 
 #One metric for evaluating the quality of a transcriptome assembly is to examine the number of transcripts that were assembled that appear to be full-length or nearly full-length.
 # For non-model organisms, no such reference transcript set is available. If a high quality annotation exists for a closely related organism, then one might compare the assembled transcripts to that closely related transcriptome to examine full-length coverage. In other cases, a more general analysis to perform is to align the assembled transcripts against all known proteins and to determine the number of unique top matching proteins that align across more than X% of its length.
 
 #Dowload from SwissProt (ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz) in https://github.com/trinityrnaseq/trinityrnaseq/wiki/Counting-Full-Length-Trinity-Transcripts
 #use filezilla as the application to download uniprot database
-
 
 #copy to marbits
 #open a tunnel, then do:
@@ -938,7 +862,6 @@ SFRKIYTDLGWKFTPL
 #SBATCH --error=blastx_swissprot.err      # File to which standard err will be written | provide path
 ##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
 
-
 ###### load modules
 
 module load blast/2.7.1
@@ -951,14 +874,15 @@ blastx -query /home/sramirezc/sramirezc/crubrum_rnaseq/c.rubrum_reference/trinit
 
 #output
 
-TRINITY_DN109637_c0_g1_i1       Q09575  29.386  228     150     9       669     4       307     529     1.22e-08        58.5
-TRINITY_DN109600_c0_g1_i1       P08764  54.545  88      39      1       354     94      455     542     3.25e-23        96.7
-TRINITY_DN109600_c0_g1_i1       P25241  50.526  95      40      2       345     82      455     549     5.25e-20        87.4
-TRINITY_DN109600_c0_g1_i1       P40815  49.474  95      41      2       345     82      453     547     1.91e-19        85.9
-TRINITY_DN109603_c0_g1_i1       Q9FD71  37.327  217     134     1       756     112     74      290     8.61e-49        168
-
+#TRINITY_DN109637_c0_g1_i1       Q09575  29.386  228     150     9       669     4       307     529     1.22e-08        58.5
+#TRINITY_DN109600_c0_g1_i1       P08764  54.545  88      39      1       354     94      455     542     3.25e-23        96.7
+#TRINITY_DN109600_c0_g1_i1       P25241  50.526  95      40      2       345     82      455     549     5.25e-20        87.4
+#TRINITY_DN109600_c0_g1_i1       P40815  49.474  95      41      2       345     82      453     547     1.91e-19        85.9
+#TRINITY_DN109603_c0_g1_i1       Q9FD71  37.327  217     134     1       756     112     74      290     8.61e-49        168
 
 #examine the percent of the target being aligned to by the best matching Trinity transcript, like so:
+
+#script
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -1011,9 +935,7 @@ TRINITY_DN30833_c0_g1_i2        O15254  52.616  688     319     6       134     
 #There are 8027 proteins that are represented by nearly full-length transcripts, having >80% alignment coverage.
 #There are 5651 proteins that are covered by more than 90% of their protein lengths.
 
-#############3 Efectivamente 
-
-#To obtain a rough list of genes to see what it's inside de assembly, i did this:
+############# #To obtain a rough list of genes to see what it's inside de assembly, i did this:
 
 #I did another blastx using the uniprot database downloaded from https://www.uniprot.org/uniprotkb?query=%2A with only reviewed records (568363)
 #Built the database as I did before but did not chop the ID. Then I did this:
@@ -1157,7 +1079,6 @@ makeblastdb -in softcoralgenes.fasta -dbtype nucl -parse_seqids
 #SBATCH --error=blastx_soft.err      # File to which standard err will be written | provide path
 ##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
 
-
 ###### load modules
 
 module load blast/2.7.1
@@ -1168,26 +1089,21 @@ blastn -query /home/sramirezc/sramirezc/crubrum_rnaseq/c.rubrum_reference/crubru
 
 #################### Script ends here ###################
 
-
-
-
-
 #Octocorallia:
 #Baja los datos de octos y hacer blast 
 #P. clavata puede estar mejor anota :)
-
-Paramuricea clavata 
-Eunicella verrucosa 
-Eunicella cavolinii
-Gorgonia ventalina
-Leptogorgia sarmentosa 
+#Paramuricea clavata 
+#Eunicella verrucosa 
+#Eunicella cavolinii
+#Gorgonia ventalina
+#Leptogorgia sarmentosa 
 
 #Utilizando genes anotados de corales de Ensembl:
--rw-r--r-- 1 sramirezc bio 76M Dec 29 12:25 Acropora_millepora-GCA_013753865.1-2022_03-cds.fa
--rw-r--r-- 1 sramirezc bio 58M Dec 29 12:25 Dendronephthya_gigantea-GCA_004324835.1-2021_11-cds.fa
--rw-r--r-- 1 sramirezc bio 55M Dec 29 12:25 Orbicella_faveolata-GCA_002042975.1-2021_12-cds.fa
--rw-r--r-- 1 sramirezc bio 45M Dec 29 12:25 Pocillopora_damicornis-GCA_003704095.1-2021_11-cds.fa
--rw-r--r-- 1 sramirezc bio 60M Dec 29 12:25 Stylophora_pistillata-GCA_002571385.1-2021_11-cds.fa
+#-rw-r--r-- 1 sramirezc bio 76M Dec 29 12:25 Acropora_millepora-GCA_013753865.1-2022_03-cds.fa
+#-rw-r--r-- 1 sramirezc bio 58M Dec 29 12:25 Dendronephthya_gigantea-GCA_004324835.1-2021_11-cds.fa
+#-rw-r--r-- 1 sramirezc bio 55M Dec 29 12:25 Orbicella_faveolata-GCA_002042975.1-2021_12-cds.fa
+#-rw-r--r-- 1 sramirezc bio 45M Dec 29 12:25 Pocillopora_damicornis-GCA_003704095.1-2021_11-cds.fa
+#-rw-r--r-- 1 sramirezc bio 60M Dec 29 12:25 Stylophora_pistillata-GCA_002571385.1-2021_11-cds.fa
 
 #concatenate all fasta downloaded: https://rapid.ensembl.org/info/about/species.html, filtering by "coral"
 
@@ -1283,7 +1199,7 @@ TRINITY_DN108947_c0_g1_i1 XM_028544339.1_"uncharacterized_LOC114523428,_transcri
 TRINITY_DN108947_c0_g1_i1 XM_028544345.1_"uncharacterized_LOC114523428,_transcript_variant_X177.714   175     31      6       3       170     1039    1212    2.75e-20        100
 TRINITY_DN108947_c0_g1_i1 XM_028544341.1_"uncharacterized_LOC114523428,_transcript_variant_X177.714   175     31      6       3       170     1039    1212    2.75e-20        100
 
-##### N50
+################# 6.5) N50 ######################
 
 module load trinity/2.13.2 #then, do:
 
@@ -1332,7 +1248,7 @@ Stats based on ALL transcript contigs:
 
 #We use metazoa
 
-##################### BUSCO ###########################
+##################### 6.6) BUSCO ###########################
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
