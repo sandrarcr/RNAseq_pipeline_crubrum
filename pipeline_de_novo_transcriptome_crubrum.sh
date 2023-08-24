@@ -82,7 +82,7 @@ module avail #command to check programs intalled in marbits --> verify you have 
 #RSEM
 #Salmon
 
-##################################### 1) FastQC #############################################
+########################################## 1) FastQC #############################################
 
 #define variables:
 
@@ -122,15 +122,12 @@ inputFile=$(awk "NR==$SLURM_ARRAY_TASK_ID" fastqFileList.txt)
 # do all the interesting things
 fastqc --outdir fastqc_output ${inputFile}
 
-############ Script finish here
+############ Script finish here ############
 
 #execute
 sbatch fastqc.slurm
 
-#JOBID = 589256 --> 09/ago/2022 --> You get a job ID after execute the script
-
-#$ for f in /directory/of/the/data/*.fastq.gz; do fastqc --outdir /output/directory/fastqc_output $f ; done #the one i used in HK
-
+# for f in /directory/of/the/data/*.fastq.gz; do fastqc --outdir /output/directory/fastqc_output $f ; done #the one i used in HK
 
 #################################### 2) Trimmomatic #######################################
 #To remove adapters that come from the illumina and to remove bad sequences
@@ -176,15 +173,14 @@ do
      trimmomatic PE -threads 10 -phred33 -trimlog f1_trimmolog $f1 $f2 "$f1"_paired.fq.gz "$f1"_unpaired.fq.gz "$f2"_paired.fq.gz "$f2"_unpaired.fq.gz ILLUMINACLIP:./adapters/TruSeq3-PE.fa:2:30:10 LEADING:4 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:40 ;
 done
 
-
 trimmomatic PE -threads 10 -phred33 -trimlog f1_trimmolog ${inputFile1} ${inputFile2} "${inputFile1}"_paired.fq.gz "${inputFile1}"_unpaired.fq.gz ${inputFile2}_paired.fq.gz ${inputFile2}_unpaired.fq.gz ILLUMINACLIP:./adapters/TruSeq3-PE.fa:2:30:10 LEADING:4 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:40
 
-#################################################### This script never worked, we needed to find a solution, so I did this:
+######## This script never worked, we needed to find a solution, so I did this:
 
 tmux new-session #open an interactive session within marbits 
 srun --pty /bin/bash #This will allocate an interactive session in a compute node and will asign to you 2 CPUs to work
 
-#from the direct command line (and the respective directory where I wanted to run things, I did:
+#from the direct command line (and the respective directory where I wanted to run things, so I did:
 
 for f1 in *_R1.fastq.gz
 do
@@ -251,9 +247,6 @@ fastqc --outdir fastqc_output ${inputFile}
 
 ############### Script ends here ################
 
-#job ID = 592752
-
-
 ############################################# 4) Kraken #################################################
 #Taxonomic sequence classifier that assigns taxonomic labels to short DNA reads. It does this by examining the -mers within a read and querying a database with those K-mers. We need to eliminate bacteria, fungi and virus that don't belong to anything that it's coral.
 
@@ -285,7 +278,7 @@ export PATH=$PATH:/mnt/lustre/bio/users/sramirezc/programs/kraken2/kraken2lib.pm
 export LC_CTYPE=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 
-######## 4.2) Build Kraken2 custom database ########
+######## 4.2) Build Kraken2 custom database ###################
 
 ############### Step 4.2.1: Download the ncbi taxonomy names and tree and accession number to taxon maps
 #download available databases for kraken in https://ccb.jhu.edu/software/kraken2/index.shtml?t=downloads, with:
@@ -299,7 +292,7 @@ wget -m ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/.
 ./kraken2-build --download-library fungi --db ../kraken2_db --no-masking
 ./kraken2-build --download-library viral --db ../kraken2_db --no-masking
 
-############### Step 4.2.3: Build the database
+############### Step 4.3: Build the database ##################
 
 nano kraken-build-lib
 
@@ -326,7 +319,7 @@ sbatch kraken-build-lib
 ## Output:
 #Database construction complete. [Total: 7h3m27.058s]
 
-############### Step 4.4.4 - Classify my reads
+############### Step 4.4 - Classify my reads ##############################
 
 #script 
 nano kraken #Always check the paths and the name of the files before running:
@@ -351,9 +344,9 @@ sbatch kraken
 
 #output
 
-################################## 5) Design transcriptome reference ################################
+################################## 5) Design transcriptome reference using Trinity ################################
 
-###Trinity
+#script:
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -379,22 +372,19 @@ sbatch Trinity.slurm
 
 #Check for Trinity.err inside //home/sramirezc/sramirezc/crubrum_rnaseq/c.rubrum_reference/
 
-#Reference? Yeahhh, it is: trinity_denovo_c.rubrum.Trinity.fasta
-#no errors in Trinity.err
-#history of process inside Trinity.log.out
-
+#output: trinity_denovo_c.rubrum.Trinity.fasta
 #TOTAL TRANSCRIPTS FROM RAW DE NOVO TRANSCRIPTOME: 533146
 
 #Now, we need to check we didn't end up with a transcriptome that actually has the genes that come from the Coral, so we do:
 
 ########################### 6) Transcriptome Assembly Quality Assessment #########################
-#align with Bowtie2
+#mapping/align with Bowtie2
 #see completeness with BUSCO
 #use N50
 #transdecoder
 
 ################### 6.1) Transdecoder ########################
-#identifies candidate coding regions within transcript sequences because it is important to know that the contigs created during de novo assembly actually transcribed real genes and it works ok for filtering and to avoid reduncy as you end up with A LOT of data. Trust me, you'll be grateful ;)
+#identifies candidate coding regions within transcript sequences because it is important to know that the contigs created during de novo assembly actually transcribed real genes and to avoid reduncy as you end up with A LOT of data.
 
 #script:
 
@@ -421,7 +411,7 @@ TransDecoder.LongOrfs -t crubrum.trinity.fasta --output_dir /home/sramirezc/sram
 
 #We obtain longest_orfs.pep: 204254 longest ORFs
 
-######## Step 6.1.1) Including homology searches as ORF retention criteria ######
+########## Step 6.1.1) Including homology searches as ORF retention criteria ##########
 
 #script
 
@@ -453,7 +443,7 @@ blastp -query longest_orfs.pep -db /home/sramirezc/sramirezc/crubrum_rnaseq/asse
 #transcripts.fasta.transdecoder.gff3 : positions within the target transcripts of the final selected ORFs
 #transcripts.fasta.transdecoder.bed  : bed-formatted file describing ORF positions, best for viewing using GenomeView or IGV.
 
-######## Step 6.1.2) Predict the likely coding regions #####
+############ Step 6.1.2) Predict the likely coding regions ##########
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -494,6 +484,7 @@ EAKALGEQVNNSRKRINTIKTQIEQHRIRRSMHVNGDEDNIDEEDRLRNSIEEEKSRYKD
 #Total transcripts with longest ORF and homology: 124373
 
 ############# Step 6.1.3) Get complete transcript seq for final selected contigs. It selects the column that says gene
+
 awk 'BEGIN{FS="\t"}{if ($3 == "gene") print}' *.transdecoder.gff3 > final_assembly_after_transdecoder_genes.gff3 
 
 cut -f 1,4,5 *transdecoder_genes.gff3 > crubrum_final_transdecoder_genes.bed #cut columns 1, 4 and 5 to the output
@@ -501,8 +492,7 @@ cut -f 1,4,5 *transdecoder_genes.gff3 > crubrum_final_transdecoder_genes.bed #cu
 bedtools getfasta -fi crubrum.trinity.fasta -bed crubrum_final_transdecoder_genes.bed -fo crubrum_final_reference.fasta #using bedtools to extract the nucleotide sequences corresponding to the genomic coordinates specified in the crubrum_final_transdecoder_genes.bed file, and write them to a new file called crubrum_final_reference.fasta!!! Keep it for further analysis.
 
 less crubrum_final_reference.fasta
-
-#
+# This is the definitive
 
 ######################### 6.2) Bowtie2 ####################################
 
@@ -613,7 +603,7 @@ sed -i 's/:.*$//' crubrum_final_reference.fasta
 #from this: >TRINITY_DN0_c0_g1_i2:1-3918 
 #to this: >TRINITY_DN0_c0_g1_i2
 
-#### 6.3.1) create referemce:
+######### 6.3.1) create reference:
 
 #script:
 
@@ -639,7 +629,6 @@ module load perl/5.28
 
 align_and_estimate_abundance.pl  --transcripts crubrum_final_reference.fasta --est_method RSEM --aln_method bowtie2 --trinity_mode --prep_reference
 
-
 #### Script ends here :) #####
 
 less RSEM_ref.err:
@@ -652,7 +641,6 @@ less RSEM_ref.err:
 #CMD: rsem-prepare-reference  --transcript-to-gene-map /mnt/lustre/bio/users/sramirezc/crubrum_rnaseq/c.rubrum_reference/downstream_analyses/RSEM/RSEM_out/RSEM_ref_est/crubrum_final_reference.fasta.gene_trans_map /mnt/lustre/bio/users/sramirezc/crubrum_rnaseq/c.rubrum_reference/downstream_analyses/RSEM/RSEM_out/RSEM_ref_est/crubrum_final_reference.fasta /mnt/lustre/bio/users/sramirezc/crubrum_rnaseq/c.rubrum_reference/downstream_analyses/RSEM/RSEM_out/RSEM_ref_est/crubrum_final_reference.fasta.RSEM
 #Only prepping reference. Stopping now.
 ######## Script ends here ######
-
 
 ###### 6.3.2) using align_and_estimate_abundance.pl ########
 
@@ -807,7 +795,7 @@ filter_low_expr_transcripts.pl --matrix crubrum.gene.TPM.not_cross_norm --transc
 
 #Matrix is filtered.
 
-##################### 6.4) Counting Full Length Trinity Transcripts with BLAST ##################
+##################### 6.6) Counting Full Length Trinity Transcripts with BLAST ##################
 
 #One metric for evaluating the quality of a transcriptome assembly is to examine the number of transcripts that were assembled that appear to be full-length or nearly full-length.
 # For non-model organisms, no such reference transcript set is available. If a high quality annotation exists for a closely related organism, then one might compare the assembled transcripts to that closely related transcriptome to examine full-length coverage. In other cases, a more general analysis to perform is to align the assembled transcripts against all known proteins and to determine the number of unique top matching proteins that align across more than X% of its length.
@@ -894,7 +882,6 @@ blastx -query /home/sramirezc/sramirezc/crubrum_rnaseq/c.rubrum_reference/trinit
 #SBATCH --error=blastx_swissprot_add.err      # File to which standard err will be written | provide path
 ##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
 
-
 ###### load modules
 
 module load blast/2.7.1
@@ -977,7 +964,6 @@ c.rubrum_blastx_uniprot.outfmt6.txt
 #SBATCH --error=blastx_swissprot_add.err      # File to which standard err will be written | provide path
 ##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
 
-
 ###### load modules
 
 module load blast/2.7.1
@@ -1006,32 +992,36 @@ analyze_blastPlus_topHit_coverage.pl c.rubrum_blastx_uniprot.outfmt6.txt ../../.
 
 Table 1 Number of ESTs used for comparative analysis of each species and number of BLASTP hits between the red coral transcrip- tome and the EST bank of each species (e value = 10e10)
 
+######################## 6.7) Annotation ######################
+
+#Here we also include what we just did: Swissprot/Uniprot
+
+#We want to know which transcripts have an accurate gene annotation to predict their functions. Since octocorals are cnidarians poorly studied, we have to be creative and use a highly known curated database such as swissprot (the one we did before), and create a couple of databases more with available fasta annotations from other cnidarians and corals. So we do this:
 
 #Went to NCBI and downloaded a fasta containing the genes from softcorals only:
 
 https://www.ncbi.nlm.nih.gov/nuccore:
 
-Corallium rubrum (658)
-Hemicorallium imperiale (223)
-Hemicorallium laauense (194)
-Corallium japonicum (120)
-Pleurocorallium niveum (102)
-Pleurocorallium secundum (82)
-Pleurocorallium konojoi (80)
-Pleurocorallium elatius (64)
-Corallium tortuosum (56)
-Pleurocorallium porcellanum (55)
-Hemicorallium ducale (52)
-Corallium sp. 6 THT-2013 (39)
-Pleurocorallium thrinax (36)
-Pleurocorallium borneense (34)
-Hemicorallium regale (29)
-Paracorallium sp. 4 THT-2013 (27)
-Hemicorallium niobe (23)
-Hemicorallium abyssale (22)
-Pleurocorallium inutile (21)
-Corallium cf. elatius NEA-2012 (20)
-All other taxa (366)
+#Corallium rubrum (658)
+#Hemicorallium imperiale (223)
+#Hemicorallium laauense (194)
+#Corallium japonicum (120)
+#Pleurocorallium niveum (102)
+#Pleurocorallium secundum (82)
+#Pleurocorallium konojoi (80)
+#Pleurocorallium elatius (64)
+#Corallium tortuosum (56)
+#Pleurocorallium porcellanum (55)
+#Hemicorallium ducale (52)
+#Corallium sp. 6 THT-2013 (39)
+#Pleurocorallium thrinax (36)
+#Pleurocorallium borneense (34)
+#Hemicorallium regale (29)
+#Paracorallium sp. 4 THT-2013 (27)
+#Hemicorallium niobe (23)
+#Hemicorallium abyssale (22)
+#Pleurocorallium inutile (21)
+#Corallium cf. elatius NEA-2012 (20)
 
 #Total of 2303 record looking like this:
 
@@ -1043,7 +1033,7 @@ CCTATGGAATTAGCACTAGGGCTTATTATACTAATAGTGCTAACGTATGGATTGAAGGCCCCGGCTCTAA
 GATTAGCAATATTCTGTTTGGGAGTGACACTACTTATGGGTGCTGCTGGGTTATTAGCTGAGCCCCATCT
 GCTATGTTGGACACAGGCTATTAAGATGTTGGTGATGCTAAGTGGGTTAGCC
 
-#make database with downloaded fasta file --custom databases:
+############ 6.7.1) make database with downloaded fasta file --custom databases ##############
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -1065,7 +1055,6 @@ makeblastdb -in softcoralgenes.fasta -dbtype nucl -parse_seqids
 #nucl because we're gonna use it with crubrum_reference
 
 ###blastx -query /home/sramirezc/sramirezc/crubrum_rnaseq/c.rubrum_reference/crubrum.trinity.fasta -db /home/sramirezc/sramirezc/crubrum_rnaseq/assembl_quality/blast/databases/uniprot/uniprot_021222.fasta -out /home/sramirezc/sramirezc/crubrum_rnaseq/assembl_quality/blast/uniprot_res/c.rubrum_blastx_uniprot.outfmt6.txt -max_hsps 1 -evalue 1e-5 -num_threads 30 -max_target_seqs 5 -outfmt 6
-
 
 #run blastn since it's nucleotide:
 
@@ -1089,14 +1078,7 @@ blastn -query /home/sramirezc/sramirezc/crubrum_rnaseq/c.rubrum_reference/crubru
 
 #################### Script ends here ###################
 
-#Octocorallia:
-#Baja los datos de octos y hacer blast 
-#P. clavata puede estar mejor anota :)
-#Paramuricea clavata 
-#Eunicella verrucosa 
-#Eunicella cavolinii
-#Gorgonia ventalina
-#Leptogorgia sarmentosa 
+################### 6.7.2) Other corals: #####################
 
 #Utilizando genes anotados de corales de Ensembl:
 #-rw-r--r-- 1 sramirezc bio 76M Dec 29 12:25 Acropora_millepora-GCA_013753865.1-2022_03-cds.fa
@@ -1143,7 +1125,6 @@ AAGCTTTCTCAAGATCTTCACAGGTTATCTGAACTTCAAGAAATTCCAGTTGACCTGGAG
 #SBATCH --error=blastdb_coralembl.err      # File to which standard err will be written | provide path
 ##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
 
-
 ###### load modules
 
 module load blast/2.7.1
@@ -1178,7 +1159,6 @@ makeblastdb -in corals_chopped1.fa -dbtype nucl -parse_seqids -out coralsdb
 #SBATCH --output=blastn_corals.log.out     # File to which standard out will be written | path for output files
 #SBATCH --error=blastn_corals.err      # File to which standard err will be written | provide path
 ##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
-
 
 ###### load modules
 
@@ -1228,7 +1208,6 @@ Stats based on ALL transcript contigs:
         Average contig: 624.22
         Total assembled bases: 332798719
 
-
 #####################################################
 ## Stats based on ONLY LONGEST ISOFORM per 'GENE':
 #####################################################
@@ -1243,12 +1222,11 @@ Stats based on ALL transcript contigs:
         Average contig: 525.95
         Total assembled bases: 154171724
 
-
 #The N10 through N50 values are shown computed based on all assembled contigs. In this example, 10% of the assembled bases are found in transcript contigs at least 3,669 bases in length (N10 value), and the N50 value indicates that at least half the assembled bases are found in contigs that are at least 895 bases in length.
 
 #We use metazoa
 
-##################### 6.6) BUSCO ###########################
+##################### 6.8) BUSCO ###########################
 
 #!/bin/bash
 #SBATCH --account=mbc1           #bank_account
@@ -1259,7 +1237,6 @@ Stats based on ALL transcript contigs:
 #SBATCH --output=busco-crubrum.log.out     # File to which standard out will be written | path for output files
 #SBATCH --error=busco-crubrum.err      # File to which standard err will be written | provide path
 ##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
-
 
 ####### BUSCO module already loaded and included in my PATH #######
 
@@ -1273,7 +1250,6 @@ busco -i /home/sramirezc/sramirezc/crubrum_rnaseq/c.rubrum_reference/crubrum.tri
 
 # -f --> force the analysis despite there are outpufiles already
 # --update-data --> update the linage version automatically
-
 
 ## output
 
@@ -1297,5 +1273,78 @@ busco -i /home/sramirezc/sramirezc/crubrum_rnaseq/c.rubrum_reference/crubrum.tri
 #provide a quantitative assessment of the completeness in terms of expected gene content of a transcriptome, 
 #a high level of duplication may be explained by a recent whole duplication event (biological) or a chimeric assembly of haplotypes (technical). Transcriptomes and protein sets that are not filtered for isoforms will lead to a high proportion of duplicates. Therefore you should filter them before a BUSCO analysis. 
 
+############################ Further annotation to merge with differential expression analysis #########################
+
+#our final reference
+crubrum_final.transdecoder.fasta
+
+#N. of transcripts: 
+grep -c ">" crubrum_final.transdecoder.fasta
+#124,373
+
+#Script used for Swissprot data base
+
+#!/bin/bash
+#SBATCH --account=mbc1           #bank_account
+#SBATCH --job-name=blastx_swiss
+#SBATCH --mem=500G                 # Memory in MB put the G
+#SBATCH --ntasks=1                    # related with n of nodes
+#SBATCH --cpus-per-task=48            # default = 1, max = 48
+#SBATCH --output=blastx_swissprot.log.out     # File to which standard out will be written | path for output files
+#SBATCH --error=blastx_swissprot.err      # File to which standard err will be written | provide path
+##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
 
 
+###### load modules
+
+module load blast/2.7.1
+
+# do the interesting things here:
+
+blastx -query crubrum_final.transdecoder.fasta -db swissprot.fa -out /home/sramirezc/sramirezc/crubrum_rnaseq/assembl_quality/blast/swissprot_res/crubrum_blastx_swissprot.outfmt14.txt -max_hsps 1 -evalue 1e-5 -num_threads 48 -max_target_seqs 5 -outfmt 14
+
+#We use blastx since we have a query with translated protenis obtained after filtering with transdecoder. This way is more accurate and exact than with nucleotides
+
+### Now with softcorals from ncbi
+
+#!/bin/bash
+#SBATCH --account=mbc1           #bank_account
+#SBATCH --job-name=blastx_softcoral
+#SBATCH --mem=500G                 # Memory in MB put the G
+#SBATCH --ntasks=1                    # related with n of nodes
+#SBATCH --cpus-per-task=48            # default = 1, max = 48
+#SBATCH --output=blastx_softcoral.log.out     # File to which standard out will be written | path for output files
+#SBATCH --error=blastx_softcoral.err      # File to which standard err will be written | provide path
+##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
+
+
+###### load modules
+
+module load blast/2.7.1
+
+# do the interesting things here:
+
+blastx -query crubrum_final.transdecoder_def.fasta -db softcoralsdb -out /home/sramirezc/sramirezc/crubrum_rnaseq/assembl_quality/databases/softcorals/result/c.rubrum_blastx_uniprot.outfmt14.txt -max_hsps 1 -evalue 1e-5 -num_threads 48 -max_target_seqs 5 -outfmt 14
+
+#finally with corals from ensembl:
+
+#!/bin/bash
+#SBATCH --account=mbc1           #bank_account
+#SBATCH --job-name=blastx_coral
+#SBATCH --mem=50G                 # Memory in MB put the G
+#SBATCH --ntasks=1                    # related with n of nodes
+#SBATCH --cpus-per-task=48            # default = 1, max = 48
+#SBATCH --output=blastx_coral.log.out     # File to which standard out will be written | path for output files
+#SBATCH --error=blastx_coral.err      # File to which standard err will be written | provide path
+##SBATCH --array=1-72%4                  #se pone un rango con el n de elementos que se tienen
+
+
+###### load modules
+
+module load blast/2.7.1
+
+# do the interesting things here:
+
+blastx -query crubrum_final.transdecoder_def.fasta -db coralsdb -out /home/sramirezc/sramirezc/crubrum_rnaseq/assembl_quality/coral_embl/result_coralblastx_fmt14/c.rubrum_blastx_coral.outfmt14.txt -max_hsps 1 -evalue 1e-5 -num_threads 48 -max_target_seqs 5 -outfmt 14
+
+#The results will be uploaded to Omicsbox to assign GO terms and interpro IDs.
